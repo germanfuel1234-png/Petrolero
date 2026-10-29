@@ -1,0 +1,38 @@
+{
+  "name": "petrolero",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sistema de gestión de mantenimiento de válvulas en pozos petroleros (Oil & Gas)",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "predev": "npm run build --workspace=@petrolero/shared",
+    "dev": "npm run dev --workspace=@petrolero/api & npm run dev --workspace=@petrolero/web",
+    "build": "npm run build --workspace=@petrolero/shared && npm run build --workspace=@petrolero/api && npm run build --workspace=@petrolero/web",
+    "predb:seed": "npm run build --workspace=@petrolero/shared",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:migrate": "npm run db:migrate --workspace=@petrolero/api",
+    "db:seed": "npm run db:seed --workspace=@petrolero/api",
+    "pendientes": "tsx scripts/pendientes.ts",
+    "test": "npm run test --workspace=@petrolero/api"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "prisma@6.19.3": true,
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true,
+    "@nestjs/core@10.4.22": true,
+    "esbuild@0.25.12": true
+  }
+}

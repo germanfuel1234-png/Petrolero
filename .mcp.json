@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "petrolero": {
+      "command": "node",
+      "args": ["tools/mcp-server/src/index.js"]
+    }
+  }
+}

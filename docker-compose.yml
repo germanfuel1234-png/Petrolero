@@ -1,0 +1,23 @@
+services:
+  db:
+    # PostGIS 3.4 sobre PostgreSQL 16. Se usa contenedor porque no hay psql instalado localmente.
+    image: postgis/postgis:16-3.4
+    container_name: petrolero-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: petrolero
+      POSTGRES_PASSWORD: petrolero
+      POSTGRES_DB: petrolero
+    ports:
+      - "5432:5432"
+    volumes:
+      - petrolero-db-data:/var/lib/postgresql/data
+    healthcheck:
+      # La API espera este healthcheck antes de correr migraciones.
+      test: ["CMD-SHELL", "pg_isready -U petrolero -d petrolero"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  petrolero-db-data:

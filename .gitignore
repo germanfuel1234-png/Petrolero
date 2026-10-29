@@ -1,0 +1,23 @@
+node_modules/
+dist/
+build/
+coverage/
+*.log
+
+# Variables de entorno reales. Se versiona .env.example, no el .env.
+.env
+!.env.example
+
+.DS_Store
+*.tsbuildinfo
+.vite/
+
+# Índice vectorial del RAG local (tools/ai-rag) — se regenera con `rag_engine.py index`.
+.ai/.chroma/
+__pycache__/
+*.pyc
+.venv/
+
+# Proyecto aparte (generación de video con HyperFrames): 5.6GB, incluye un virtualenv con
+# binarios de PyTorch/CUDA que superan el límite de 100MB de GitHub. No pertenece a este repo.
+video-comercial/

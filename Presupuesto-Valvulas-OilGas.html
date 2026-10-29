@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Presupuesto — Sistema de Gestión de Mantenimiento de Válvulas (Oil &amp; Gas)</title>
+
+<!-- Fuentes de Google -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+<!-- ============================================================
+SCRIPT PARA CARGAR Y CONTROLAR TUBOS 3D
+============================================================ -->
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+}
+</script>
+
+<style>
+  :root{
+    --bg:#0a0a0c;
+    --surface:#141416;
+    --surface-2:#1c1c1f;
+    --line:#2a2a2e;
+    --text:#f2f0ea;
+    --text-dim:#a8a6a0;
+    --amber:#e0a339;
+    --amber-dim:#8a692a;
+    --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    --sans: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+
+  html, body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  a{color:inherit;}
+
+  .wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 28px;
+  }
+
+  /* HERO CON LAZO 3D */
+  .hero-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    min-height: 600px;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  #tubes-canvas {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+    z-index: 0 !important;
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 28px;
+    pointer-events: none;
+  }
+
+  .hero-content * {
+    pointer-events: auto;
+  }
+
+  .hero-content .wrap {
+    width: 100%;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--amber);
+    letter-spacing: 0.02em;
+    margin-bottom: 22px;
+  }
+
+  h1 {
+    font-size: clamp(32px, 5vw, 52px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.08;
+    max-width: 18ch;
+    margin-bottom: 22px;
+  }
+
+  .hero-sub {
+    font-size: 18px;
+    color: var(--text-dim);
+    max-width: 54ch;
+    margin-bottom: 34px;
+  }
+
+  .hero-meta {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .hero-meta strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .click-indicator {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    pointer-events: none;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .click-indicator svg {
+    width: 24px;
+    height: 24px;
+    opacity: 0.5;
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 0.3;
+      transform: translateX(-50%) scale(1);
+    }
+    50% {
+      opacity: 0.7;
+      transform: translateX(-50%) scale(1.05);
+    }
+  }
+
+  /* SECCIONES */
+  section {
+    padding: 64px 0;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+  }
+
+  section:last-of-type {
+    border-bottom: none;
+  }
+
+  h2 {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 14px;
+  }
+
+  .section-lead {
+    color: var(--text-dim);
+    max-width: 62ch;
+    margin-bottom: 36px;
+    font-size: 15.5px;
+  }
+
+  /* DIAGNOSTICO / SINTESIS */
+  .diag-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+  }
+
+  .diag-card {
+    background: var(--surface);
+    padding: 26px 28px;
+  }
+
+  .diag-card h3 {
+    font-size: 13px;
+    font-family: var(--mono);
+    color: var(--amber);
+    text-transform: none;
+    margin-bottom: 10px;
+    font-weight: 500;
+  }
+
+  .diag-card p {
+    font-size: 14.5px;
+    color: var(--text-dim);
+  }
+
+  .diag-card p strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* PROBLEMAS TECNICOS */
+  .problem {
+    display: grid;
+    grid-template-columns: 52px 1fr;
+    gap: 20px;
+    padding: 26px 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .problem:last-child {
+    border-bottom: none;
+  }
+
+  .problem-num {
+    font-family: var(--mono);
+    color: var(--amber-dim);
+    font-size: 14px;
+    padding-top: 2px;
+  }
+
+  .problem h3 {
+    font-size: 16.5px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .problem p {
+    color: var(--text-dim);
+    font-size: 14.5px;
+    max-width: 62ch;
+    margin-bottom: 8px;
+  }
+
+  .code-block {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--surface-2);
+    padding: 10px 14px;
+    border-radius: 4px;
+    color: var(--amber);
+    margin: 8px 0;
+    display: block;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+  }
+
+  .problem code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--surface-2);
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--amber);
+  }
+
+  /* PASOS DE IMPLEMENTACION */
+  .step {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 22px;
+    padding: 28px 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .step:last-child {
+    border-bottom: none;
+  }
+
+  .step-num {
+    font-family: var(--mono);
+    font-size: 22px;
+    color: var(--amber);
+    font-weight: 600;
+  }
+
+  .step h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .step p {
+    color: var(--text-dim);
+    font-size: 14.5px;
+    max-width: 62ch;
+    margin-bottom: 10px;
+  }
+
+  .step ul, .step ol {
+    margin-left: 18px;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  .step ul li, .step ol li {
+    margin-bottom: 6px;
+  }
+
+  /* CALLOUT PLAZO 3 SEMANAS */
+  .deadline-callout {
+    background: var(--surface-2);
+    border: 1px solid var(--amber-dim);
+    border-left: 3px solid var(--amber);
+    padding: 24px 26px;
+    border-radius: 4px;
+    margin-bottom: 36px;
+  }
+
+  .deadline-callout .tag {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+  }
+
+  .deadline-callout h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+
+  .deadline-callout p {
+    font-size: 14.5px;
+    color: var(--text-dim);
+    max-width: 66ch;
+    margin-bottom: 10px;
+  }
+
+  .deadline-callout p:last-child {
+    margin-bottom: 0;
+  }
+
+  .deadline-callout strong {
+    color: var(--text);
+  }
+
+  /* PLAN UNICO DE PRESUPUESTO */
+  .single-plan {
+    background: var(--surface-2);
+    border: 1px solid var(--amber-dim);
+    padding: 36px 32px;
+    border-radius: 4px;
+    margin-top: 12px;
+    margin-bottom: 36px;
+    position: relative;
+  }
+
+  .plan-badge {
+    position: absolute;
+    top: -12px;
+    right: 28px;
+    background: var(--amber);
+    color: var(--bg);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .plan-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--amber);
+    margin-bottom: 12px;
+  }
+
+  .plan-name {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .plan-desc {
+    font-size: 14.5px;
+    color: var(--text-dim);
+    margin-bottom: 24px;
+    max-width: 60ch;
+  }
+
+  .plan-price-wrapper {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+
+  .plan-price {
+    font-family: var(--mono);
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--amber);
+  }
+
+  .plan-price-note {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+  }
+
+  .plan-items-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text);
+  }
+
+  .plan-items {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  @media (max-width: 640px) {
+    .plan-items {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .plan-items li {
+    font-size: 14px;
+    color: var(--text);
+    padding-left: 22px;
+    position: relative;
+    line-height: 1.4;
+  }
+
+  .plan-items li::before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    color: var(--amber);
+    font-weight: bold;
+    font-family: var(--mono);
+  }
+
+  .plan-items li.excluded {
+    color: var(--text-dim);
+  }
+
+  .plan-items li.excluded::before {
+    content: "—";
+    color: var(--text-dim);
+  }
+
+  .price-note {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 20px;
+    font-family: var(--mono);
+  }
+
+  .currency-note {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 10px;
+    font-family: var(--mono);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--amber);
+    padding: 10px 14px;
+  }
+
+  .currency-note strong {
+    color: var(--text);
+  }
+
+  /* DETALLE POR HORA */
+  .hours-table-wrap {
+    margin-top: 36px;
+  }
+
+  .hours-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    border: 1px solid var(--line);
+  }
+
+  .hours-table th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 12px 16px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .hours-table td {
+    padding: 12px 16px;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .hours-table td:first-child {
+    color: var(--text);
+  }
+
+  .hours-table th:not(:first-child),
+  .hours-table td:not(:first-child) {
+    text-align: right;
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+
+  .hours-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .hours-table tr.hours-total td {
+    border-top: 1px solid var(--amber-dim);
+    border-bottom: none;
+    color: var(--text);
+    font-weight: 700;
+    font-family: var(--mono);
+  }
+
+  .hours-table tr.hours-total td:first-child {
+    font-family: var(--sans);
+  }
+
+  @media (max-width: 640px) {
+    .hours-table {
+      font-size: 12.5px;
+    }
+    .hours-table th,
+    .hours-table td {
+      padding: 10px 10px;
+    }
+  }
+
+  .replaces-note {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--amber);
+    padding: 10px 14px;
+    margin-bottom: 28px;
+  }
+
+  .replaces-note strong {
+    color: var(--text);
+  }
+
+  /* PROCESO REQUERIDO */
+  .next-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 12px;
+  }
+
+  .next-item {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    font-size: 14.5px;
+    color: var(--text-dim);
+    background: var(--surface);
+    padding: 16px 20px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+
+  .next-item .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--amber);
+    margin-top: 7px;
+    flex-shrink: 0;
+  }
+
+  .next-item strong {
+    color: var(--text);
+  }
+
+  /* FOOTER */
+  .footer {
+    border-top: 1px solid var(--line);
+    padding: 50px 0 45px;
+    margin-top: 20px;
+    background: var(--bg);
+  }
+
+  .footer .wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px 30px;
+  }
+
+  .footer__copy {
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .footer__copy .accent {
+    color: var(--amber);
+  }
+
+  .footer__copy .dim {
+    opacity: 0.6;
+  }
+
+  .footer__socials {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .footer-link {
+    font-size: 13px;
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: color 0.25s ease;
+    padding: 4px 6px;
+    border-radius: 3px;
+  }
+
+  .footer-link:hover {
+    color: var(--text);
+  }
+
+  .footer-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    transition: color 0.25s ease, transform 0.2s ease;
+    padding: 4px;
+    border-radius: 4px;
+  }
+
+  .footer-icon:hover {
+    color: var(--amber);
+    transform: scale(1.08);
+  }
+
+  .footer-icon svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+  }
+
+  .footer__divider {
+    width: 1px;
+    height: 24px;
+    background: var(--line);
+    flex-shrink: 0;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    .footer .wrap {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .footer__socials {
+      width: 100%;
+      justify-content: flex-start;
+      gap: 8px;
+    }
+
+    .footer__copy {
+      font-size: 13px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .diag-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .problem,
+    .step {
+      grid-template-columns: 36px 1fr;
+      gap: 14px;
+    }
+
+    .footer {
+      padding: 35px 0 30px;
+    }
+
+    .footer__socials {
+      gap: 6px;
+    }
+
+    .footer-link {
+      font-size: 12px;
+      padding: 2px 4px;
+    }
+
+    .footer-icon svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .click-indicator {
+      bottom: 24px;
+    }
+    .click-indicator span {
+      font-size: 9px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO CON LAZO 3D -->
+<div class="hero-wrapper">
+  <canvas id="tubes-canvas"></canvas>
+
+  <div class="click-indicator">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12L12 3L21 12L12 21L3 12Z" />
+      <path d="M12 3V21" />
+      <path d="M3 12H21" />
+      <path d="M12 12L17 17" />
+      <path d="M12 12L17 7" />
+      <path d="M12 12L7 17" />
+      <path d="M12 12L7 7" />
+    </svg>
+    <span>Click para cambiar colores</span>
+  </div>
+
+  <div class="hero-content">
+    <div class="wrap">
+      <div class="eyebrow">PROPUESTA TÉCNICA Y PRESUPUESTO</div>
+      <h1>Sistema de Gestión de Mantenimiento de Válvulas — Oil &amp; Gas</h1>
+      <p class="hero-sub">Plataforma web con mapa geográfico interactivo, visor 3D de válvulas por pozo, registro de mantenimiento y planificación de tareas por zona.</p>
+      <div class="hero-meta">
+        <span><strong>Cliente:</strong> A confirmar</span>
+        <span><strong>Área:</strong> Oil &amp; Gas · Mantenimiento de Pozos</span>
+        <span><strong>Fecha:</strong> Octubre 2026</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONTENIDO PRINCIPAL -->
+<section>
+  <div class="wrap">
+    <h2>Contexto del Proyecto</h2>
+    <p class="section-lead">El cliente opera pozos de petróleo con múltiples válvulas cada uno, y hoy lleva ese mantenimiento de forma manual. La plataforma digitaliza el seguimiento: qué válvula tiene mantenimiento al día, cuál necesita una prueba de hermeticidad, y qué acción correctiva corresponde cuando esa prueba da negativa.</p>
+    <div class="diag-grid">
+      <div class="diag-card">
+        <h3>// OPERACIÓN</h3>
+        <p>Pozos agrupados por <strong>zona geográfica</strong>, cada uno con una cantidad <strong>variable</strong> de válvulas (ejemplo dado: 8 a 9 por pozo). El sistema debe adaptarse a esa cantidad real, no a un número fijo.</p>
+      </div>
+      <div class="diag-card">
+        <h3>// REGLA DE NEGOCIO CENTRAL</h3>
+        <p>Cada válvula pasa por mantenimiento + prueba de hermeticidad. Si da <strong>OK</strong>, se revisa recién en 1 año. Si da <strong>negativa</strong>, requiere una acción correctiva (lavado, bombeo, etc.) que el sistema agrupa y planifica.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Alcance del MVP</h2>
+    <p class="section-lead">Recorte funcional definido junto con el cliente a partir de las especificaciones relevadas: la base completa para el día a día operativo, con espacio para sumar la app de campo offline en una Fase 2.</p>
+
+    <div class="problem">
+      <div class="problem-num">01</div>
+      <div>
+        <h3>Modelo de Datos + Importador de Excel</h3>
+        <p>Zona → Pozo → Válvula (cantidad variable) → Historial de mantenimiento, cargado inicialmente desde el Excel que ya usa el cliente.</p>
+      </div>
+    </div>
+
+    <div class="problem">
+      <div class="problem-num">02</div>
+      <div>
+        <h3>Backend con Geolocalización (PostGIS)</h3>
+        <p>API para zonas, pozos y válvulas, con soporte de consultas espaciales para el agrupamiento geográfico de tareas.</p>
+      </div>
+    </div>
+
+    <div class="problem">
+      <div class="problem-num">03</div>
+      <div>
+        <h3>Mapa Interactivo por Zona</h3>
+        <p>Click en una zona del mapa despliega sus pozos; click en un pozo abre su detalle. Clustering básico de zonas con cantidad de pozos.</p>
+      </div>
+    </div>
+
+    <div class="problem">
+      <div class="problem-num">04</div>
+      <div>
+        <h3>Visor 3D de Válvulas por Pozo</h3>
+        <p>Modelo 3D (React Three Fiber) con la cantidad real de válvulas del pozo, coloreadas según estado (OK / próximo a vencer / falla). Click en una válvula abre su detalle.</p>
+      </div>
+    </div>
+
+    <div class="problem">
+      <div class="problem-num">05</div>
+      <div>
+        <h3>Registro de Mantenimiento</h3>
+        <p>Formulario de carga: mantenimiento realizado, resultado de prueba de hermeticidad (OK/Negativo), cálculo automático de próxima revisión a +1 año, y acción correctiva obligatoria si el resultado es negativo.</p>
+      </div>
+    </div>
+
+    <div class="problem">
+      <div class="problem-num">06</div>
+      <div>
+        <h3>Agrupamiento, Planificación Semanal y Aviso al Equipo</h3>
+        <p>Válvulas agrupadas por tipo de acción pendiente, sugerencia de agrupamiento por cercanía geográfica, armado de plan semanal y notificación al equipo de campo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Pasos de Implementación y Tareas</h2>
+    <p class="section-lead">Trabajo coordinado entre la información operativa que aporta el cliente y el desarrollo técnico de la plataforma.</p>
+
+    <div class="step">
+      <div class="step-num">01</div>
+      <div>
+        <h3>De su lado (datos e información operativa)</h3>
+        <ol>
+          <li>Compartir el Excel maestro actual de pozos y válvulas, con su estructura real de columnas.</li>
+          <li>Confirmar coordenadas geográficas reales de cada pozo (o la fuente de donde sacarlas).</li>
+          <li>Definir el catálogo completo de acciones correctivas (lavado, bombeo, y el resto).</li>
+          <li>Definir roles de usuario (supervisor, técnico de campo) y el canal para avisar al equipo del plan semanal.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">02</div>
+      <div>
+        <h3>De mi lado (desarrollo)</h3>
+        <ol>
+          <li>Diseño del modelo de datos (zonas, pozos, válvulas, historial) con PostGIS y migraciones.</li>
+          <li>Importador de Excel y API backend (CRUD + consultas geoespaciales).</li>
+          <li>Mapa interactivo con clustering de zonas y drill-down a pozos.</li>
+          <li>Visor 3D de válvulas por pozo y formulario de registro de mantenimiento con la regla de +1 año.</li>
+          <li>Agrupamiento por acción correctiva, clustering geográfico y planificador semanal con aviso al equipo.</li>
+          <li>Pruebas, documentación y acompañamiento en la puesta en marcha.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>¿Se puede entregar en 3 semanas?</h2>
+
+    <div class="deadline-callout">
+      <div class="tag">// RESPUESTA CORTA</div>
+      <h3>El alcance completo del MVP, no. Una primera entrega funcional, sí.</h3>
+      <p>El MVP completo (los 6 módulos de la sección anterior) está estimado en <strong>~345 horas</strong>. Trabajando a tiempo completo en solitario (~40 h/semana), eso son <strong>~9 semanas</strong>, no 3. Prometer el alcance completo en 3 semanas implicaría trabajar a un ritmo que compromete la calidad y la estabilidad de algo que va a manejar datos de seguridad de pozos — no es un riesgo que convenga tomar.</p>
+      <p>Lo que sí entra en <strong>3 semanas (~110 horas)</strong> es una <strong>Fase 1 acotada y usable</strong>: carga de datos reales desde Excel, mapa con zonas y pozos navegables, visor 3D básico por pozo, y el formulario de registro de mantenimiento con la regla de +1 año funcionando de punta a punta. El agrupamiento inteligente por acción, el clustering geográfico avanzado, el planificador semanal y las notificaciones al equipo quedarían para una <strong>Fase 2</strong> inmediatamente después.</p>
+      <p>Recomiendo proponerle esto al cliente así, en vez de forzar los 6 módulos en 3 semanas: una Fase 1 real y demostrable en la fecha que pidió, con el resto a continuación sin perder nada de lo ya construido.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Presupuesto</h2>
+    <p class="section-lead">Tarifa acordada: USD 20/hora. Se muestran las dos opciones: la Fase 1 entregable en 3 semanas, y el alcance completo del MVP como continuación natural.</p>
+
+    <div class="single-plan">
+      <div class="plan-badge">Entregable en 3 semanas</div>
+      <div class="plan-label">// FASE 1 · ALCANCE ACOTADO</div>
+      <div class="plan-name">Carga de Datos + Mapa + Visor 3D + Registro de Mantenimiento</div>
+      <div class="plan-desc">Lo mínimo funcional de punta a punta: pozos y válvulas reales cargados desde Excel, navegación por mapa y 3D, y el flujo completo de registrar un mantenimiento con la regla de +1 año.</div>
+
+      <div class="plan-price-wrapper">
+        <div class="plan-price">USD 2.200</div>
+        <div class="plan-price-note">110 h estimadas · Pago único</div>
+      </div>
+
+      <div class="plan-items-title">Incluye:</div>
+      <ul class="plan-items">
+        <li>Modelo de datos (zonas, pozos, válvulas)</li>
+        <li>Importador de Excel</li>
+        <li>Backend API básico</li>
+        <li>Mapa interactivo zona → pozo</li>
+        <li>Visor 3D básico por pozo</li>
+        <li>Formulario de mantenimiento + regla de +1 año</li>
+        <li class="excluded">Agrupamiento geográfico inteligente (Fase 2)</li>
+        <li class="excluded">Planificador semanal + aviso al equipo (Fase 2)</li>
+      </ul>
+    </div>
+
+    <div class="single-plan">
+      <div class="plan-badge">Alcance completo</div>
+      <div class="plan-label">// MVP COMPLETO · FASE 1 + FASE 2</div>
+      <div class="plan-name">Sistema de Gestión de Mantenimiento de Válvulas</div>
+      <div class="plan-desc">Los 6 módulos definidos en el alcance, incluyendo agrupamiento por acción, clustering geográfico con PostGIS, planificador semanal y aviso al equipo de campo.</div>
+
+      <div class="plan-price-wrapper">
+        <div class="plan-price">USD 6.900</div>
+        <div class="plan-price-note">345 h estimadas · ~9 semanas · Pago único o por etapas</div>
+      </div>
+
+      <div class="plan-items-title">Servicios e implementaciones incluidas:</div>
+      <ul class="plan-items">
+        <li>Todo lo de la Fase 1</li>
+        <li>Agrupamiento por acción correctiva pendiente</li>
+        <li>Clustering geográfico (PostGIS) de pozos cercanos</li>
+        <li>Planificador semanal de tareas</li>
+        <li>Aviso al equipo de campo</li>
+        <li>Diseño responsive (celular, tablet, PC)</li>
+        <li>Documentación y acompañamiento post-entrega</li>
+      </ul>
+    </div>
+
+    <div class="hours-table-wrap">
+      <div class="plan-items-title">Detalle por hora — alcance completo</div>
+      <table class="hours-table">
+        <thead>
+          <tr>
+            <th>Módulo</th>
+            <th>Horas est.</th>
+            <th>Tarifa/hora</th>
+            <th>Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Setup inicial (repo, infra, esqueleto)</td>
+            <td>15 h</td>
+            <td>USD 20</td>
+            <td>USD 300</td>
+          </tr>
+          <tr>
+            <td>Modelo de datos + importador Excel</td>
+            <td>35 h</td>
+            <td>USD 20</td>
+            <td>USD 700</td>
+          </tr>
+          <tr>
+            <td>Backend API (CRUD + PostGIS)</td>
+            <td>50 h</td>
+            <td>USD 20</td>
+            <td>USD 1.000</td>
+          </tr>
+          <tr>
+            <td>Mapa interactivo (MapLibre + clustering)</td>
+            <td>45 h</td>
+            <td>USD 20</td>
+            <td>USD 900</td>
+          </tr>
+          <tr>
+            <td>Visor 3D + detalle de pozo</td>
+            <td>55 h</td>
+            <td>USD 20</td>
+            <td>USD 1.100</td>
+          </tr>
+          <tr>
+            <td>Formulario de mantenimiento + reglas de negocio</td>
+            <td>25 h</td>
+            <td>USD 20</td>
+            <td>USD 500</td>
+          </tr>
+          <tr>
+            <td>Agrupamiento + clustering geográfico + planificador + aviso</td>
+            <td>45 h</td>
+            <td>USD 20</td>
+            <td>USD 900</td>
+          </tr>
+          <tr>
+            <td>QA, responsive, roles básicos, deploy</td>
+            <td>30 h</td>
+            <td>USD 20</td>
+            <td>USD 600</td>
+          </tr>
+          <tr>
+            <td>Gestión y comunicación con el cliente</td>
+            <td>45 h</td>
+            <td>USD 20</td>
+            <td>USD 900</td>
+          </tr>
+          <tr class="hours-total">
+            <td>Total</td>
+            <td>345 h</td>
+            <td>—</td>
+            <td>USD 6.900</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="currency-note"><strong>Moneda:</strong> los montos se expresan en USD como referencia de mercado. El pago se realiza en pesos argentinos (ARS), al tipo de cambio vigente el día de cada pago.</p>
+
+    <p class="price-note">* No incluye hosting/dominio (se cotiza aparte), modelos 3D con CAD realista (geometría genérica incluida), ni la futura app de campo con modo offline, que se cotiza como etapa separada.</p>
+  </div>
+</section>
+
+<section style="border-bottom:none;">
+  <div class="wrap">
+    <h2>Requisitos para Iniciar</h2>
+    <div class="next-list">
+      <div class="next-item">
+        <span class="dot"></span>
+        <span><strong>Excel maestro real:</strong> el archivo que hoy usa el cliente para cargar pozos y válvulas, para construir el importador sobre su estructura real.</span>
+      </div>
+      <div class="next-item">
+        <span class="dot"></span>
+        <span><strong>Coordenadas de los pozos:</strong> sin ubicación real no se puede construir el mapa ni el agrupamiento geográfico.</span>
+      </div>
+      <div class="next-item">
+        <span class="dot"></span>
+        <span><strong>Definición de roles y catálogo de acciones correctivas:</strong> quién puede ver/editar qué, y el listado completo de acciones posibles (lavado, bombeo, etc.).</span>
+      </div>
+      <div class="next-item">
+        <span class="dot"></span>
+        <span><strong>Aprobación del presupuesto:</strong> confirmación de la Fase 1 (3 semanas) para coordinar el inicio de tareas.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="wrap">
+    <span class="footer__copy">
+      © 2026 Rodríguez Germán ·
+      <span class="accent">Web Designer &amp; Developer</span> ·
+      <span class="dim">Actualizado octubre 2026</span>
+    </span>
+
+    <div class="footer__socials">
+      <a href="https://germanrodriguez.ar" class="footer-link">Contacto</a>
+      <a href="https://germanrodriguez.ar/privacidad.html" class="footer-link">Aviso legal y privacidad</a>
+
+      <span class="footer__divider"></span>
+
+      <a href="https://www.linkedin.com/in/german-rodriguez-al/" target="_blank" rel="noopener noreferrer" class="footer-icon" aria-label="LinkedIn">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+        </svg>
+      </a>
+
+      <a href="https://www.instagram.com/germanfuel/" target="_blank" rel="noopener noreferrer" class="footer-icon" aria-label="Instagram">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+        </svg>
+      </a>
+
+      <a href="https://www.workana.com/freelancer/a4b17bd76520cd4cc80e6a183b90fa84" target="_blank" rel="noopener noreferrer" class="footer-icon" aria-label="Workana">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M7 8h10v2H7V8zm0 3h10v2H7v-2zm0 3h7v2H7v-2z"/>
+          <text x="8.5" y="17" font-family="Arial, sans-serif" font-weight="bold" font-size="12" fill="#0a0a0c">W</text>
+        </svg>
+      </a>
+    </div>
+  </div>
+</footer>
+
+<!-- SCRIPT PARA TUBOS 3D -->
+<script type="module">
+  import * as THREE from 'three';
+  const tubesModule = await import(
+    'https://cdn.jsdelivr.net/npm/threejs-components@0.0.19/build/cursors/tubes1.min.js'
+  );
+  const TubesCursor = tubesModule.default;
+
+  const canvas = document.getElementById('tubes-canvas');
+
+  const app = TubesCursor(canvas, {
+    tubes: {
+      colors: ['#e0a339', '#8a692a', '#f2f0ea'],
+      lights: {
+        intensity: 200,
+        colors: ['#e0a339', '#ff8a2e', '#10b981', '#60aed5'],
+      },
+    },
+  });
+
+  function randomColors(count) {
+    const colors = [];
+    for (let i = 0; i < count; i++) {
+      const hex = '#' + Math.floor(Math.random() * 16777215)
+        .toString(16)
+        .padStart(6, '0');
+      colors.push(hex);
+    }
+    return colors;
+  }
+
+  canvas.addEventListener('click', () => {
+    const tubeColors = randomColors(3);
+    const lightColors = randomColors(4);
+    app.tubes.setColors(tubeColors);
+    app.tubes.setLightsColors(lightColors);
+  });
+
+  function handleResize() {
+    if (app && app.resize) {
+      app.resize();
+    }
+  }
+
+  window.addEventListener('resize', handleResize);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SCADA Valve Management - Oil & Gas Operations</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: '#ff0000',
+              dark: '#cc0000',
+              light: '#ff3333'
+            },
+            industrial: {
+              950: '#030712',
+              900: '#0a0a0a',
+              800: '#121212',
+              700: '#1e1e1e',
+              600: '#2a2a2a',
+              500: '#3f3f46',
+              400: '#71717a',
+              300: '#a1a1aa',
+              200: '#e4e4e7',
+              100: '#f4f4f5'
+            },
+            status: {
+              ok: '#10b981',
+              warn: '#f59e0b',
+              danger: '#ef4444'
+            }
+          },
+          fontFamily: {
+            sans: ['Geist', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <!-- React 18 & Babel -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { background-color: #030712; color: #f4f4f5; font-family: 'Geist', sans-serif; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0a0a0a; }
+    ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+    .grid-pattern {
+      background-size: 24px 24px;
+      background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    }
+  </style>
+</head>
+<body class="bg-industrial-950 text-industrial-100 min-h-screen selection:bg-brand selection:text-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // Datos simulados de Pozos y Válvulas
+    const INITIAL_ZONES = [
+      { id: 'z1', name: 'Vaca Muerta - Loma Campana', count: 42, lat: -38.41, lng: -68.91, status: 'warn' },
+      { id: 'z2', name: 'Cuenca Golfo San Jorge - Zona Norte', count: 38, lat: -45.86, lng: -67.48, status: 'ok' },
+      { id: 'z3', name: 'Cuenca Austral - Pali Aike', count: 24, lat: -52.31, lng: -69.34, status: 'danger' },
+      { id: 'z4', name: 'Cuenca Cuyana - Barrancas', count: 18, lat: -33.15, lng: -68.82, status: 'ok' }
+    ];
+
+    const INITIAL_WELLS = [
+      { 
+        id: 'w-101', name: 'LC-4022', zone: 'Vaca Muerta - Loma Campana', lat: -38.42, lng: -68.92, status: 'danger', 
+        lastInspection: '2025-10-14', pendingAction: 'Lavado', priority: 'Alta (45 días)',
+        valves: [
+          { id: 'V-1', name: 'Master Válvula Sup', type: 'Compuerta', status: 'ok', lastCheck: '2025-01-10', nextCheck: '2026-01-10', test: 'OK', action: 'Ninguna' },
+          { id: 'V-2', name: 'Master Válvula Inf', type: 'Compuerta', status: 'danger', lastCheck: '2024-09-15', nextCheck: '2025-09-15', test: 'Negativo', action: 'Lavado' },
+          { id: 'V-3', name: 'Wing Valve Producción', type: 'Esférica', status: 'warn', lastCheck: '2024-12-01', nextCheck: '2025-12-01', test: 'OK', action: 'Revisión fugas' },
+          { id: 'V-4', name: 'Wing Valve Inyección', type: 'Esférica', status: 'ok', lastCheck: '2025-02-18', nextCheck: '2026-02-18', test: 'OK', action: 'Ninguna' },
+          { id: 'V-5', name: 'Choke Manual', type: 'Reguladora', status: 'ok', lastCheck: '2025-01-20', nextCheck: '2026-01-20', test: 'OK', action: 'Ninguna' },
+          { id: 'V-6', name: 'Kill Line Valve', type: 'Retención', status: 'danger', lastCheck: '2024-08-10', nextCheck: '2025-08-10', test: 'Negativo', action: 'Bombeo' },
+          { id: 'V-7', name: 'BOP Superior', type: 'Ariete', status: 'ok', lastCheck: '2025-03-01', nextCheck: '2026-03-01', test: 'OK', action: 'Ninguna' },
+          { id: 'V-8', name: 'BOP Inferior', type: 'Ariete', status: 'warn', lastCheck: '2024-11-20', nextCheck: '2025-11-20', test: 'OK', action: 'Engrase' }
+        ]
+      },
+      { 
+        id: 'w-102', name: 'LC-4025', zone: 'Vaca Muerta - Loma Campana', lat: -38.40, lng: -68.89, status: 'ok', 
+        lastInspection: '2025-02-20', pendingAction: 'Ninguna', priority: 'Baja',
+        valves: [
+          { id: 'V-1', name: 'Master Válvula Sup', type: 'Compuerta', status: 'ok', lastCheck: '2025-02-20', nextCheck: '2026-02-20', test: 'OK', action: 'Ninguna' },
+          { id: 'V-2', name: 'Master Válvula Inf', type: 'Compuerta', status: 'ok', lastCheck: '2025-02-20', nextCheck: '2026-02-20', test: 'OK', action: 'Ninguna' },
+          { id: 'V-3', name: 'Wing Valve', type: 'Esférica', status: 'ok', lastCheck: '2025-02-20', nextCheck: '2026-02-20', test: 'OK', action: 'Ninguna' }
+        ]
+      },
+      { 
+        id: 'w-103', name: 'GSJ-112', zone: 'Cuenca Golfo San Jorge - Zona Norte', lat: -45.85, lng: -67.45, status: 'warn', 
+        lastInspection: '2025-01-12', pendingAction: 'Bombeo', priority: 'Media (15 días)',
+        valves: [
+          { id: 'V-1', name: 'Master Principal', type: 'Compuerta', status: 'ok', lastCheck: '2025-01-12', nextCheck: '2026-01-12', test: 'OK', action: 'Ninguna' },
+          { id: 'V-2', name: 'Wing Valve', type: 'Esférica', status: 'warn', lastCheck: '2024-10-05', nextCheck: '2025-10-05', test: 'Negativo', action: 'Bombeo' }
+        ]
+      },
+      { 
+        id: 'w-104', name: 'PA-09', zone: 'Cuenca Austral - Pali Aike', lat: -52.30, lng: -69.30, status: 'danger', 
+        lastInspection: '2024-12-10', pendingAction: 'Cambio de sello', priority: 'Crítica (60 días)',
+        valves: [
+          { id: 'V-1', name: 'Master Sup', type: 'Compuerta', status: 'danger', lastCheck: '2024-12-10', nextCheck: '2025-12-10', test: 'Negativo', action: 'Cambio de sello' }
+        ]
+      },
+      { 
+        id: 'w-105', name: 'BAR-21', zone: 'Cuenca Cuyana - Barrancas', lat: -33.14, lng: -68.80, status: 'ok', 
+        lastInspection: '2025-03-05', pendingAction: 'Ninguna', priority: 'Baja',
+        valves: [
+          { id: 'V-1', name: 'Master General', type: 'Compuerta', status: 'ok', lastCheck: '2025-03-05', nextCheck: '2026-03-05', test: 'OK', action: 'Ninguna' }
+        ]
+      }
+    ];
+
+    function App() {
+      const [currentView, setCurrentView] = useState('dashboard'); // dashboard, pending, planner, import
+      const [selectedWell, setSelectedWell] = useState(null);
+      const [selectedValveForMaintenance, setSelectedValveForMaintenance] = useState(null);
+      const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+      const [wells, setWells] = useState(INITIAL_WELLS);
+      const [searchQuery, setSearchQuery] = useState('');
+      const [zoneFilter, setZoneFilter] = useState('all');
+      const [statusFilter, setStatusFilter] = useState('all');
+      const [actionFilter, setActionFilter] = useState('all');
+
+      // KPIs calculados
+      const kpis = useMemo(() => {
+        const totalWells = wells.length * 24; // simulación de escala
+        let okValves = 0;
+        let negValves = 0;
+        let pendingTotal = 0;
+        let expiringSoon = 3;
+
+        wells.forEach(w => {
+          w.valves.forEach(v => {
+            if (v.status === 'ok') okValves++;
+            else negValves++;
+            if (v.action !== 'Ninguna') pendingTotal++;
+          });
+        });
+
+        return {
+          totalWells: 122,
+          okValves: 842,
+          negValves: 118,
+          pendingActions: pendingTotal + 14,
+          expiringSoon: 12
+        };
+      }, [wells]);
+
+      // Filtrado de pozos
+      const filteredWells = useMemo(() => {
+        return wells.filter(w => {
+          const matchSearch = w.name.toLowerCase().includes(searchQuery.toLowerCase()) || w.zone.toLowerCase().includes(searchQuery.toLowerCase());
+          const matchZone = zoneFilter === 'all' || w.zone === zoneFilter;
+          const matchStatus = statusFilter === 'all' || w.status === statusFilter;
+          const matchAction = actionFilter === 'all' || w.pendingAction === actionFilter;
+          return matchSearch && matchZone && matchStatus && matchAction;
+        });
+      }, [wells, searchQuery, zoneFilter, statusFilter, actionFilter]);
+
+      useEffect(() => {
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+      }, [currentView, selectedWell, showMaintenanceModal]);
+
+      return (
+        <div className="min-h-screen flex flex-col bg-industrial-950 grid-pattern">
+          {/* Header Superior SCADA */}
+          <header className="bg-industrial-900 border-b border-industrial-800 px-6 py-3 flex items-center justify-between sticky top-0 z-40">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-brand animate-pulse"></div>
+                <span className="font-mono font-bold tracking-wider text-sm text-industrial-200">SCADA-VALVE v3.4</span>
+              </div>
+              <span className="text-industrial-700">|</span>
+              <nav className="flex items-center gap-1">
+                <button 
+                  onClick={() => setCurrentView('dashboard')}
+                  className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-2 ${currentView === 'dashboard' ? 'bg-industrial-800 text-industrial-100 border border-industrial-700' : 'text-industrial-400 hover:text-industrial-200'}`}
+                >
+                  <i data-lucide="map" className="w-4 h-4 text-brand"></i>
+                  Mapa & Pozos
+                </button>
+                <button 
+                  onClick={() => setCurrentView('pending')}
+                  className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-2 ${currentView === 'pending' ? 'bg-industrial-800 text-industrial-100 border border-industrial-700' : 'text-industrial-400 hover:text-industrial-200'}`}
+                >
+                  <i data-lucide="alert-triangle" className="w-4 h-4 text-status-warn"></i>
+                  Acciones Pendientes
+                </button>
+                <button 
+                  onClick={() => setCurrentView('planner')}
+                  className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-2 ${currentView === 'planner' ? 'bg-industrial-800 text-industrial-100 border border-industrial-700' : 'text-industrial-400 hover:text-industrial-200'}`}
+                >
+                  <i data-lucide="calendar" className="w-4 h-4 text-status-ok"></i>
+                  Planificador Semanal
+                </button>
+                <button 
+                  onClick={() => setCurrentView('import')}
+                  className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-2 ${currentView === 'import' ? 'bg-industrial-800 text-industrial-100 border border-industrial-700' : 'text-industrial-400 hover:text-industrial-200'}`}
+                >
+                  <i data-lucide="file-spreadsheet" className="w-4 h-4 text-cyan-400"></i>
+                  Importación Excel
+                </button>
+              </nav>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-industrial-950 px-3 py-1 rounded border border-industrial-800 text-xs font-mono">
+                <span className="text-status-ok flex items-center gap-1">● <span>Sistema Online</span></span>
+                <span className="text-industrial-600">|</span>
+                <span className="text-industrial-400">PostGIS Active</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded bg-industrial-800 border border-industrial-700 flex items-center justify-center font-bold text-xs text-brand">
+                  GS
+                </div>
+                <div className="hidden md:block text-left">
+                  <div className="text-xs font-medium">Germán Rodríguez</div>
+                  <div className="text-[10px] text-industrial-400">Supervisor Campo</div>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* KPI Bar Superior */}
+          <div className="bg-industrial-900/60 border-b border-industrial-800/80 px-6 py-2.5 grid grid-cols-2 md:grid-cols-5 gap-4 text-xs font-mono">
+            <div className="flex items-center justify-between bg-industrial-900 p-2 rounded border border-industrial-800">
+              <span className="text-industrial-400">Total Pozos</span>
+              <span className="font-bold text-industrial-100 text-sm">{kpis.totalWells}</span>
+            </div>
+            <div className="flex items-center justify-between bg-industrial-900 p-2 rounded border border-industrial-800">
+              <span className="text-industrial-400">Válvulas OK</span>
+              <span className="font-bold text-status-ok text-sm">{kpis.okValves}</span>
+            </div>
+            <div className="flex items-center justify-between bg-industrial-900 p-2 rounded border border-industrial-800">
+              <span className="text-industrial-400">Pruebas Negativas</span>
+              <span className="font-bold text-status-danger text-sm">{kpis.negValves}</span>
+            </div>
+            <div className="flex items-center justify-between bg-industrial-900 p-2 rounded border border-industrial-800">
+              <span className="text-industrial-400">Acciones Pendientes</span>
+              <span className="font-bold text-status-warn text-sm">{kpis.pendingActions}</span>
+            </div>
+            <div className="flex items-center justify-between bg-industrial-900 p-2 rounded border border-industrial-800 col-span-2 md:col-span-1">
+              <span className="text-industrial-400">Vencer en 30d</span>
+              <span className="font-bold text-cyan-400 text-sm">{kpis.expiringSoon}</span>
+            </div>
+          </div>
+
+          {/* Contenido principal según vista */}
+          <main className="flex-1 flex overflow-hidden">
+            {currentView === 'dashboard' && (
+              <div className="flex-1 flex flex-col md:flex-row relative">
+                {/* Panel lateral de filtros */}
+                <aside className="w-full md:w-80 bg-industrial-900 border-r border-industrial-800 p-4 flex flex-col gap-4 overflow-y-auto z-10">
+                  <div>
+                    <h2 className="text-xs font-mono text-industrial-400 uppercase tracking-wider mb-2">Buscador de Pozos</h2>
+                    <div className="relative">
+                      <i data-lucide="search" className="w-4 h-4 text-industrial-500 absolute left-3 top-2.5"></i>
+                      <input 
+                        type="text" 
+                        placeholder="Buscar por nombre o zona..." 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-industrial-950 border border-industrial-800 rounded pl-9 pr-3 py-2 text-xs text-industrial-100 placeholder-industrial-500 focus:outline-none focus:border-brand"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <h2 className="text-xs font-mono text-industrial-400 uppercase tracking-wider mb-2">Filtrar por Zona</h2>
+                    <select 
+                      value={zoneFilter}
+                      onChange={(e) => setZoneFilter(e.target.value)}
+                      className="w-full bg-industrial-950 border border-industrial-800 rounded px-3 py-2 text-xs text-industrial-100 focus:outline-none focus:border-brand"
+                    >
+                      <option value="all">Todas las Zonas (122 pozos)</option>
+                      {INITIAL_ZONES.map(z => (
+                        <option key={z.id} value={z.name}>{z.name} ({z.count})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <h2 className="text-xs font-mono text-industrial-400 uppercase tracking-wider mb-2">Estado General</h2>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button 
+                        onClick={() => setStatusFilter('all')}
+                        className={`py-1.5 px-2 rounded text-xs font-medium border ${statusFilter === 'all' ? 'bg-industrial-800 border-industrial-600 text-white' : 'bg-industrial-950 border-industrial-800 text-industrial-400'}`}
+                      >
+                        Todos
+                      </button>
+                      <button 
+                        onClick={() => setStatusFilter('ok')}
+                        className={`py-1.5 px-2 rounded text-xs font-medium border ${statusFilter === 'ok' ? 'bg-status-ok/20 border-status-ok text-status-ok' : 'bg-industrial-950 border-industrial-800 text-industrial-400'}`}
+                      >
+                        OK
+                      </button>
+                      <button 
+                        onClick={() => setStatusFilter('danger')}
+                        className={`py-1.5 px-2 rounded text-xs font-medium border ${statusFilter === 'danger' ? 'bg-status-danger/20 border-status-danger text-status-danger' : 'bg-industrial-950 border-industrial-800 text-industrial-400'}`}
+                      >
+                        Falla
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto mt-2">
+                    <h2 className="text-xs font-mono text-industrial-400 uppercase tracking-wider mb-2">Listado de Pozos ({filteredWells.length})</h2>
+                    <div className="space-y-2">
+                      {filteredWells.map(well => (
+                        <div 
+                          key={well.id}
+                          onClick={() => setSelectedWell(well)}
+                          className={`p-3 rounded border cursor-pointer transition ${selectedWell?.id === well.id ? 'bg-industrial-800 border-brand' : 'bg-industrial-950/60 border-industrial-800 hover:border-industrial-700'}`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-xs font-mono text-industrial-100 flex items-center gap-1.5">
+                              <span className={`w-2 h-2 rounded-full ${well.status === 'ok' ? 'bg-status-ok' : well.status === 'warn' ? 'bg-status-warn' : 'bg-status-danger'}`}></span>
+                              {well.name}
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-industrial-800 text-industrial-300 font-mono">
+                              {well.valves.length} válvulas
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-industrial-400 truncate">{well.zone}</div>
+                          {well.pendingAction !== 'Ninguna' && (
+                            <div className="mt-2 flex items-center justify-between text-[10px]">
+                              <span className="text-status-warn bg-status-warn/10 px-1.5 py-0.5 rounded font-mono">Acción: {well.pendingAction}</span>
+                              <span className="text-industrial-500">{well.priority}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </aside>
+
+                {/* Mapa interactivo estilo MapLibre / GIS */}
+                <div className="flex-1 bg-industrial-950 relative flex items-center justify-center overflow-hidden">
+                  {/* Simulación de grilla de mapa satelital / terreno petrolero */}
+                  <div className="absolute inset-0 bg-[#060913] grid-pattern opacity-90"></div>
+                  
+                  {/* Elementos de mapa simulados (Rutas y pozos) */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    <svg className="w-full h-full opacity-35 stroke-cyan-500/40" fill="none">
+                      <path d="M 100,200 Q 400,100 800,300 T 1400,500" strokeWidth="2" strokeDasharray="6 6" />
+                      <path d="M 200,600 Q 600,400 1000,700" strokeWidth="2" />
+                    </svg>
+                  </div>
+
+                  {/* Clusters de Zona interactivos en el mapa */}
+                  <div className="absolute inset-0 p-12 flex flex-wrap items-center justify-around gap-16">
+                    {INITIAL_ZONES.map((zone, idx) => (
+                      <div 
+                        key={zone.id}
+                        onClick={() => setZoneFilter(zone.name)}
+                        className="relative group cursor-pointer"
+                      >
+                        <div className={`absolute -inset-3 rounded-full opacity-30 animate-ping ${zone.status === 'danger' ? 'bg-status-danger' : zone.status === 'warn' ? 'bg-status-warn' : 'bg-status-ok'}`}></div>
+                        <div className={`relative px-4 py-3 rounded-xl border bg-industrial-900/90 backdrop-blur shadow-2xl flex flex-col items-center gap-1 transition group-hover:scale-105 ${zone.status === 'danger' ? 'border-status-danger text-status-danger' : zone.status === 'warn' ? 'border-status-warn text-status-warn' : 'border-status-ok text-status-ok'}`}>
+                          <div className="text-xs font-bold font-mono tracking-wider">{zone.name.split(' - ')[0]}</div>
+                          <div className="text-lg font-mono font-bold flex items-center gap-1.5 text-industrial-100">
+                            <i data-lucide="map-pin" className="w-4 h-4 text-brand"></i>
+                            {zone.count} pozos
+                          </div>
+                          <div className="text-[10px] text-industrial-400 font-mono">Click para expandir cluster</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pines de Pozos individuales en la zona seleccionada */}
+                  <div className="absolute bottom-8 right-8 bg-industrial-900/90 border border-industrial-800 p-4 rounded-lg shadow-xl backdrop-blur max-w-sm z-20">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs font-mono uppercase tracking-wider text-industrial-300">Vista de Telemetría SCADA</h3>
+                      <span className="w-2 h-2 rounded-full bg-status-ok animate-pulse"></span>
+                    </div>
+                    <p className="text-xs text-industrial-400 mb-3">Haga click en cualquier pozo del panel lateral izquierdo para desplegar su visor 3D de válvulas y registro de hermeticidad.</p>
+                    <div className="flex items-center gap-2 text-[10px] font-mono text-industrial-400">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-status-ok"></span> OK</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-status-warn"></span> Próximo</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-status-danger"></span> Fallo</span>
+                    </div>
+                  </div>
+
+                  {/* Controles de Mapa */}
+                  <div className="absolute top-6 right-6 flex flex-col gap-2 z-20">
+                    <button className="w-9 h-9 rounded bg-industrial-900 border border-industrial-800 flex items-center justify-center text-industrial-300 hover:bg-industrial-800 shadow">
+                      <i data-lucide="plus" className="w-4 h-4"></i>
+                    </button>
+                    <button className="w-9 h-9 rounded bg-industrial-900 border border-industrial-800 flex items-center justify-center text-industrial-300 hover:bg-industrial-800 shadow">
+                      <i data-lucide="minus" className="w-4 h-4"></i>
+                    </button>
+                    <button className="w-9 h-9 rounded bg-industrial-900 border border-industrial-800 flex items-center justify-center text-industrial-300 hover:bg-industrial-800 shadow">
+                      <i data-lucide="layers" className="w-4 h-4"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentView === 'pending' && (
+              <div className="flex-1 bg-industrial-950 p-6 overflow-y-auto">
+                <div className="max-w-7xl mx-auto">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h1 className="text-lg font-bold font-mono tracking-wider flex items-center gap-2">
+                        <i data-lucide="alert-triangle" className="w-5 h-5 text-status-warn"></i>
+                        Vista de Acciones Correctivas Pendientes
+                      </h1>
+                      <p className="text-xs text-industrial-400">Agrupadas por tipo de intervención requerida en campo (Lavado, Bombeo, Sello).</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button className="bg-brand hover:bg-brand-dark text-white text-xs font-medium px-4 py-2 rounded flex items-center gap-2 transition">
+                        <i data-lucide="calendar-plus" className="w-4 h-4"></i>
+                        Crear Plan con Seleccionadas
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Tablero Kanban / Agrupado */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Columna Lavado */}
+                    <div className="bg-industrial-900 rounded-lg border border-industrial-800 flex flex-col">
+                      <div className="p-3 border-b border-industrial-800 flex items-center justify-between bg-industrial-900/50">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-status-warn"></span>
+                          <span className="font-mono text-xs font-bold uppercase tracking-wider">Lavado de Válvulas</span>
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded bg-industrial-800 font-mono text-industrial-300">4 ítems</span>
+                      </div>
+                      <div className="p-3 flex-1 space-y-3 overflow-y-auto max-h-[calc(100vh-250px)]">
+                        <div className="bg-industrial-950 p-3 rounded border border-industrial-800 hover:border-industrial-700 transition cursor-pointer">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-mono font-bold text-xs text-industrial-100">LC-4022 (V-2)</span>
+                            <span className="text-[10px] text-status-danger font-mono bg-status-danger/10 px-1.5 py-0.5 rounded">Prioridad Alta</span>
+                          </div>
+                          <div className="text-[11px] text-industrial-400 mb-2">Vaca Muerta - Loma Campana</div>
+                          <div className="flex items-center justify-between text-[10px] text-industrial-500 font-mono pt-2 border-t border-industrial-900">
+<span>Detectado: 14 Sep 2025</span>
+                            <span className="text-brand">Master Válvula Inf</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-industrial-950 p-3 rounded border border-industrial-800 hover:border-industrial-700 transition cursor-pointer">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-mono font-bold text-xs text-industrial-100">GSJ-118 (V-1)</span>
+                            <span className="text-[10px] text-status-warn font-mono bg-status-warn/10 px-1.5 py-0.5 rounded">Media</span>
+                          </div>
+                          <div className="text-[11px] text-industrial-400 mb-2">Golfo San Jorge</div>
+                          <div className="flex items-center justify-between text-[10px] text-industrial-500 font-mono pt-2 border-t border-industrial-900">
+                            <span>Detectado: 20 Sep 2025</span>
+                            <span className="text-brand">Wing Valve</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Columna Bombeo */}
+                    <div className="bg-industrial-900 rounded-lg border border-industrial-800 flex flex-col">
+                      <div className="p-3 border-b border-industrial-800 flex items-center justify-between bg-industrial-900/50">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-status-danger"></span>
+                          <span className="font-mono text-xs font-bold uppercase tracking-wider">Bombeo de Grasa</span>
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded bg-industrial-800 font-mono text-industrial-300">3 ítems</span>
+                      </div>
+                      <div className="p-3 flex-1 space-y-3 overflow-y-auto max-h-[calc(100vh-250px)]">
+                        <div className="bg-industrial-950 p-3 rounded border border-industrial-800 hover:border-industrial-700 transition cursor-pointer">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-mono font-bold text-xs text-industrial-100">LC-4022 (V-6)</span>
+                            <span className="text-[10px] text-status-danger font-mono bg-status-danger/10 px-1.5 py-0.5 rounded">Crítica</span>
+                          </div>
+                          <div className="text-[11px] text-industrial-400 mb-2">Vaca Muerta - Loma Campana</div>
+                          <div className="flex items-center justify-between text-[10px] text-industrial-500 font-mono pt-2 border-t border-industrial-900">
+                            <span>Detectado: 10 Ago 2025</span>
+                            <span className="text-brand">Kill Line Valve</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Columna Cambio de Sello */}
+                    <div className="bg-industrial-900 rounded-lg border border-industrial-800 flex flex-col">
+                      <div className="p-3 border-b border-industrial-800 flex items-center justify-between bg-industrial-900/50">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+                          <span className="font-mono text-xs font-bold uppercase tracking-wider">Cambio de Sello / Mecánico</span>
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded bg-industrial-800 font-mono text-industrial-300">2 ítems</span>
+                      </div>
+                      <div className="p-3 flex-1 space-y-3 overflow-y-auto max-h-[calc(100vh-250px)]">
+                        <div className="bg-industrial-950 p-3 rounded border border-industrial-800 hover:border-industrial-700 transition cursor-pointer">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-mono font-bold text-xs text-industrial-100">PA-09 (V-1)</span>
+                            <span className="text-[10px] text-status-danger font-mono bg-status-danger/10 px-1.5 py-0.5 rounded">Urgente</span>
+                          </div>
+                          <div className="text-[11px] text-industrial-400 mb-2">Cuenca Austral - Pali Aike</div>
+                          <div className="flex items-center justify-between text-[10px] text-industrial-500 font-mono pt-2 border-t border-industrial-900">
+                            <span>Detectado: 10 Dic 2024</span>
+                            <span className="text-brand">Master Sup</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentView === 'planner' && (
+              <div className="flex-1 bg-industrial-950 p-6 overflow-y-auto">
+                <div className="max-w-7xl mx-auto">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h1 className="text-lg font-bold font-mono tracking-wider flex items-center gap-2">
+                        <i data-lucide="calendar" className="w-5 h-5 text-status-ok"></i>
+                        Planificador Semanal por Cercanía Geográfica (PostGIS)
+                      </h1>
+                      <p className="text-xs text-industrial-400">Sugerencias automáticas para optimizar traslados de cuadrillas en yacimiento.</p>
+                    </div>
+                    <button className="bg-industrial-800 hover:bg-industrial-700 text-industrial-100 text-xs font-medium px-4 py-2 rounded border border-industrial-700 flex items-center gap-2 transition">
+                      <i data-lucide="bell" className="w-4 h-4 text-brand"></i>
+                      Notificar Cuadrilla Vaca Muerta Norte
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Grupos sugeridos */}
+                    <div className="lg:col-span-2 space-y-4">
+                      <div className="bg-industrial-900 p-4 rounded-lg border border-industrial-800">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-status-ok"></span>
+                            <span className="font-mono text-xs font-bold uppercase">Grupo Sugerido #1: Sector Loma Campana Este</span>
+                          </div>
+                          <span className="text-[11px] font-mono text-industrial-400">Radio: 4.2 km · 3 Pozos</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 mb-4">
+                          <div className="bg-industrial-950 p-2.5 rounded border border-industrial-800 text-xs">
+                            <div className="font-bold font-mono text-industrial-100">LC-4022</div>
+                            <div className="text-[10px] text-status-danger">1 Válvula con Lavado</div>
+                          </div>
+                          <div className="bg-industrial-950 p-2.5 rounded border border-industrial-800 text-xs">
+                            <div className="font-bold font-mono text-industrial-100">LC-4025</div>
+                            <div className="text-[10px] text-status-ok">Revisión Preventiva</div>
+                          </div>
+                          <div className="bg-industrial-950 p-2.5 rounded border border-industrial-800 text-xs">
+                            <div className="font-bold font-mono text-industrial-100">LC-4030</div>
+                            <div className="text-[10px] text-status-warn">Próximo a vencer</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-3 border-t border-industrial-800 text-xs">
+                          <span className="text-industrial-400">Estado: <span className="text-status-ok font-medium">Asignado a Lunes 08:00 hs</span></span>
+                          <div className="flex items-center gap-2">
+                            <button className="px-3 py-1 bg-industrial-800 hover:bg-industrial-700 rounded text-industrial-200 transition">Reordenar</button>
+                            <button className="px-3 py-1 bg-brand hover:bg-brand-dark text-white rounded transition">Confirmar Grupo</button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-industrial-900 p-4 rounded-lg border border-industrial-800">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-status-warn"></span>
+                            <span className="font-mono text-xs font-bold uppercase">Grupo Sugerido #2: Sector Añelo Batería 3</span>
+                          </div>
+                          <span className="text-[11px] font-mono text-industrial-400">Radio: 6.8 km · 2 Pozos</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                          <div className="bg-industrial-950 p-2.5 rounded border border-industrial-800 text-xs">
+                            <div className="font-bold font-mono text-industrial-100">AN-12</div>
+                            <div className="text-[10px] text-status-danger">Bombeo de grasa urgente</div>
+                          </div>
+                          <div className="bg-industrial-950 p-2.5 rounded border border-industrial-800 text-xs">
+                            <div className="font-bold font-mono text-industrial-100">AN-15</div>
+                            <div className="text-[10px] text-status-ok">Operativo</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-3 border-t border-industrial-800 text-xs">
+                          <span className="text-industrial-400">Estado: <span className="text-industrial-300 font-medium">Pendiente de confirmación</span></span>
+                          <div className="flex items-center gap-2">
+                            <button className="px-3 py-1 bg-industrial-800 hover:bg-industrial-700 rounded text-industrial-200 transition">Reordenar</button>
+                            <button className="px-3 py-1 bg-brand hover:bg-brand-dark text-white rounded transition">Confirmar Grupo</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mini mapa de referencia y resumen */}
+                    <div className="bg-industrial-900 p-4 rounded-lg border border-industrial-800 flex flex-col">
+                      <h3 className="text-xs font-mono uppercase tracking-wider text-industrial-300 mb-3">Geolocalización de Cuadrillas</h3>
+                      <div className="flex-1 bg-industrial-950 rounded border border-industrial-800 min-h-[240px] relative flex items-center justify-center overflow-hidden">
+                        <div className="absolute inset-0 grid-pattern opacity-50"></div>
+                        <div className="text-center p-4 z-10">
+                          <i data-lucide="map-pin" className="w-8 h-8 text-brand mx-auto mb-2 animate-bounce"></i>
+                          <div className="text-xs font-mono text-industrial-200">Sector Loma Campana</div>
+                          <div className="text-[10px] text-industrial-400 mt-1">3 Cuadrillas en ruta asignadas</div>
+                        </div>
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-industrial-800 text-xs text-industrial-400 flex items-center justify-between font-mono">
+                        <span>Eficiencia de Ruta:</span>
+                        <span className="text-status-ok font-bold">94.2% óptima</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentView === 'import' && (
+              <div className="flex-1 bg-industrial-950 p-6 overflow-y-auto">
+                <div className="max-w-4xl mx-auto">
+                  <div className="mb-6">
+                    <h1 className="text-lg font-bold font-mono tracking-wider flex items-center gap-2">
+                      <i data-lucide="file-spreadsheet" className="w-5 h-5 text-cyan-400"></i>
+                      Importación Masiva de Datos (Excel / CSV)
+                    </h1>
+                    <p className="text-xs text-industrial-400">Cargue el archivo maestro de pozos y válvulas para actualizar el inventario SCADA.</p>
+                  </div>
+
+                  <div className="bg-industrial-900 border-2 border-dashed border-industrial-700 rounded-xl p-10 text-center flex flex-col items-center justify-center gap-4 hover:border-brand transition cursor-pointer mb-6">
+                    <div className="w-16 h-16 rounded-full bg-industrial-800 flex items-center justify-center text-cyan-400">
+                      <i data-lucide="upload-cloud" className="w-8 h-8"></i>
+                    </div>
+                    <div>
+                      <div className="font-mono text-sm font-medium text-industrial-100">Arrastre su archivo Excel maestro aquí</div>
+                      <div className="text-xs text-industrial-400 mt-1">Formatos soportados: .xlsx, .csv (Máx. 50MB)</div>
+                    </div>
+                    <button className="bg-industrial-800 hover:bg-industrial-700 text-industrial-200 text-xs font-medium px-4 py-2 rounded border border-industrial-700 transition">
+                      Explorar Archivos
+                    </button>
+                  </div>
+
+                  {/* Reporte Post-Importación simulado */}
+                  <div className="bg-industrial-900 rounded-lg border border-industrial-800 p-4">
+                    <h3 className="text-xs font-mono uppercase tracking-wider text-industrial-300 mb-3">Último Reporte de Importación (Master_Pozos_Q1.xlsx)</h3>
+                    <div className="grid grid-cols-3 gap-4 text-xs font-mono mb-4">
+                      <div className="bg-industrial-950 p-3 rounded border border-industrial-800">
+                        <div className="text-industrial-400">Procesados</div>
+                        <div className="text-lg font-bold text-industrial-100">124 filas</div>
+                      </div>
+                      <div className="bg-industrial-950 p-3 rounded border border-industrial-800">
+                        <div className="text-industrial-400">Importados OK</div>
+                        <div className="text-lg font-bold text-status-ok">122 filas</div>
+                      </div>
+                      <div className="bg-industrial-950 p-3 rounded border border-industrial-800">
+                        <div className="text-industrial-400">Errores</div>
+                        <div className="text-lg font-bold text-status-danger">2 filas</div>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button className="px-3 py-1.5 bg-industrial-800 hover:bg-industrial-700 text-industrial-200 text-xs rounded transition flex items-center gap-1.5">
+                        <i data-lucide="download" className="w-3.5 h-3.5"></i>
+                        Descargar Reporte de Errores (.csv)
+                      </button>
+                      <button className="px-3 py-1.5 bg-brand hover:bg-brand-dark text-white text-xs rounded transition">
+                        Confirmar e Iniciar Sincronización PostGIS
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </main>
+
+          {/* MODAL / PANEL DESLIZABLE DE DETALLE DE POZO & VISOR 3D (Vista 2 y 3) */}
+          {selectedWell && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex justify-end transition-opacity">
+              <div className="w-full max-w-3xl bg-industrial-900 border-l border-industrial-800 h-full flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-right duration-200">
+                {/* Header del Panel */}
+                <div className="p-4 border-b border-industrial-800 flex items-center justify-between bg-industrial-900/90">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-3 h-3 rounded-full ${selectedWell.status === 'ok' ? 'bg-status-ok' : selectedWell.status === 'warn' ? 'bg-status-warn' : 'bg-status-danger'}`}></div>
+                    <div>
+                      <h2 className="font-bold font-mono text-base text-industrial-100 flex items-center gap-2">
+                        {selectedWell.name}
+                        <span className="text-xs px-2 py-0.5 rounded bg-industrial-800 text-industrial-300 font-mono">ID: {selectedWell.id}</span>
+                      </h2>
+                      <div className="text-xs text-industrial-400">{selectedWell.zone} · Lat: {selectedWell.lat}, Lng: {selectedWell.lng}</div>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setSelectedWell(null)}
+                    className="w-8 h-8 rounded bg-industrial-800 hover:bg-industrial-700 flex items-center justify-center text-industrial-400 hover:text-white transition"
+                  >
+                    <i data-lucide="x" className="w-4 h-4"></i>
+                  </button>
+                </div>
+
+                {/* Contenido del Panel: Visor 3D Simulado y Listado de Válvulas */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                  {/* Visor 3D Embebido Simulado */}
+                  <div className="bg-industrial-950 rounded-xl border border-industrial-800 p-4 relative overflow-hidden">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-industrial-300">
+                        <i data-lucide="box" className="w-4 h-4 text-brand"><span>Visor 3D Interactivo (Three.js / R3F)</span></i>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] font-mono text-industrial-400">
+                        <span className="bg-industrial-900 px-2 py-1 rounded border border-industrial-800">Cabezal de Pozo 9 Válvulas</span>
+                        <span className="text-brand">Rotación: Activa</span>
+                      </div>
+                    </div>
+
+                    {/* Escenario 3D Simulado visualmente con nodos interactivos */}
+                    <div className="h-64 bg-[#050811] rounded-lg border border-industrial-800/80 relative flex items-center justify-center overflow-hidden grid-pattern">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        {/* Representación gráfica vertical de árbol de válvulas */}
+                        <div className="w-16 h-48 bg-industrial-900 border-2 border-industrial-700 rounded-lg flex flex-col justify-around items-center p-1 relative shadow-2xl">
+                          <div className="absolute -left-20 text-[10px] font-mono text-industrial-400">Árbol de Producción</div>
+                          {selectedWell.valves.map((v, i) => (
+                            <div 
+                              key={v.id}
+                              onClick={() => {
+                                setSelectedValveForMaintenance(v);
+                                setShowMaintenanceModal(true);
+                              }}
+                              title={`${v.name} (${v.status})`}
+                              className={`w-12 h-4 rounded cursor-pointer transition flex items-center justify-center text-[9px] font-mono font-bold shadow ${v.status === 'ok' ? 'bg-status-ok text-industrial-950 hover:brightness-125' : v.status === 'warn' ? 'bg-status-warn text-industrial-950 hover:brightness-125' : 'bg-status-danger text-white animate-pulse hover:brightness-125'}`}
+                            >
+                              {v.id}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="absolute bottom-3 left-3 text-[10px] font-mono text-industrial-400 bg-industrial-900/80 px-2 py-1 rounded border border-industrial-800">
+                        💡 Click en cualquier válvula del modelo 3D para registrar mantenimiento
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Listado tabular alternativo de las válvulas */}
+                  <div>
+                    <h3 className="text-xs font-mono uppercase tracking-wider text-industrial-300 mb-3">Listado Tabular de Válvulas del Pozo</h3>
+                    <div className="bg-industrial-950 rounded-lg border border-industrial-800 overflow-hidden">
+                      <table className="w-full text-left text-xs font-mono">
+                        <thead className="bg-industrial-900 border-b border-industrial-800 text-industrial-400 uppercase text-[10px]">
+                          <tr>
+                            <th className="p-3">Válvula</th>
+                            <th className="p-3">Tipo</th>
+                            <th className="p-3">Hermeticidad</th>
+                            <th className="p-3">Última Rev.</th>
+                            <th className="p-3">Próxima Rev.</th>
+                            <th className="p-3 text-right">Acción</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-industrial-900">
+                          {selectedWell.valves.map((valve) => (
+                            <tr key={valve.id} className="hover:bg-industrial-900/50 transition">
+                              <td className="p-3 font-bold text-industrial-100 flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${valve.status === 'ok' ? 'bg-status-ok' : valve.status === 'warn' ? 'bg-status-warn' : 'bg-status-danger'}`}></span>
+                                {valve.name} ({valve.id})
+                              </td>
+                              <td className="p-3 text-industrial-300">{valve.type}</td>
+                              <td className="p-3">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${valve.test === 'OK' ? 'bg-status-ok/10 text-status-ok' : 'bg-status-danger/10 text-status-danger'}`}>
+                                  {valve.test}
+                                </span>
+                              </td>
+                              <td className="p-3 text-industrial-400">{valve.lastCheck}</td>
+                              <td className="p-3 text-industrial-400">{valve.nextCheck}</td>
+                              <td className="p-3 text-right">
+                                <button 
+                                  onClick={() => {
+                                    setSelectedValveForMaintenance(valve);
+                                    setShowMaintenanceModal(true);
+                                  }}
+                                  className="px-2.5 py-1 bg-industrial-800 hover:bg-industrial-700 text-industrial-100 rounded text-[11px] transition"
+                                >
+                                  Mantenimiento
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL VISTA 3: Formulario Rápido de Registro de Mantenimiento */}
+          {showMaintenanceModal && selectedValveForMaintenance && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+              <div className="bg-industrial-900 border border-industrial-800 rounded-xl max-w-lg w-full p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between mb-4 border-b border-industrial-800 pb-3">
+                  <div>
+                    <h3 className="font-bold font-mono text-sm text-industrial-100 flex items-center gap-2">
+                      <i data-lucide="wrench" className="w-4 h-4 text-brand"></i>
+                      Registro Rápido de Mantenimiento
+                    </h3>
+                    <p className="text-xs text-industrial-400">Válvula: {selectedValveForMaintenance.name} ({selectedValveForMaintenance.id})</p>
+                  </div>
+                  <button 
+                    onClick={() => setShowMaintenanceModal(false)}
+                    className="w-7 h-7 rounded bg-industrial-800 hover:bg-industrial-700 flex items-center justify-center text-industrial-400 hover:text-white transition"
+                  >
+                    <i data-lucide="x" className="w-4 h-4"></i>
+                  </button>
+                </div>
+
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  alert('¡Mantenimiento guardado con éxito! Recalculando próxima fecha de revisión (+1 año si OK)...');
+                  setShowMaintenanceModal(false);
+                }} className="space-y-4 text-xs font-mono">
+                  <div>
+                    <label className="block text-industrial-400 uppercase tracking-wider mb-1">Fecha del Mantenimiento</label>
+                    <input 
+                      type="date" 
+                      defaultValue={new Date().toISOString().split('T')[0]}
+                      className="w-full bg-industrial-950 border border-industrial-800 rounded px-3 py-2 text-industrial-100 focus:outline-none focus:border-brand"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3 bg-industrial-950 p-3 rounded border border-industrial-800">
+                    <input type="checkbox" defaultChecked id="grease" className="w-4 h-4 accent-red-600 rounded bg-industrial-900 border-industrial-700" />
+                    <label htmlFor="grease" className="text-industrial-200 cursor-pointer">Mantenimiento preventivo (engrase) realizado</label>
+                  </div>
+
+                  <div>
+                    <label className="block text-industrial-400 uppercase tracking-wider mb-2">Resultado de la Prueba de Hermeticidad</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          const el = document.getElementById('negative-action-box');
+                          if (el) el.style.display = 'none';
+                        }}
+                        className="py-3 px-4 rounded border border-status-ok/40 bg-status-ok/10 text-status-ok font-bold hover:bg-status-ok/20 transition flex items-center justify-center gap-2"
+                      >
+                        <i data-lucide="check-circle" className="w-4 h-4"></i>
+                        OK (Prueba Exitosa)
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          const el = document.getElementById('negative-action-box');
+                          if (el) el.style.display = 'block';
+                        }}
+                        className="py-3 px-4 rounded border border-status-danger/40 bg-status-danger/10 text-status-danger font-bold hover:bg-status-danger/20 transition flex items-center justify-center gap-2"
+                      >
+                        <i data-lucide="alert-circle" className="w-4 h-4"></i>
+                        Negativo (Fuga / Falla)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Campo condicional si es Negativo */}
+                  <div id="negative-action-box" className="hidden space-y-2 bg-industrial-950 p-3 rounded border border-status-danger/30">
+                    <label className="block text-status-danger uppercase tracking-wider">Acción Correctiva Obligatoria</label>
+                    <select className="w-full bg-industrial-900 border border-status-danger/40 rounded px-3 py-2 text-industrial-100 focus:outline-none focus:border-status-danger">
+                      <option value="lavado">Lavado de válvula</option>
+                      <option value="bombeo">Bombeo de grasa de alta presión</option>
+                      <option value="sello">Cambio de sello / empaquetadura</option>
+                      <option value="otro">Otra intervención correctiva</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-industrial-400 uppercase tracking-wider mb-1">Próxima Fecha de Revisión (Automática +1 año)</label>
+                    <input 
+                      type="text" 
+                      disabled 
+                      value="2026-03-24 (Calculado +365 días)"
+                      className="w-full bg-industrial-950/50 border border-industrial-800 rounded px-3 py-2 text-industrial-400 cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div className="pt-3 border-t border-industrial-800 flex justify-end gap-3">
+                    <button 
+                      type="button"
+                      onClick={() => setShowMaintenanceModal(false)}
+                      className="px-4 py-2 bg-industrial-800 hover:bg-industrial-700 text-industrial-300 rounded transition"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit"
+                      className="px-4 py-2 bg-brand hover:bg-brand-dark text-white rounded font-bold transition flex items-center gap-2"
+                    >
+                      <i data-lucide="save" className="w-4 h-4"></i>
+                      Guardar y Actualizar SCADA
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

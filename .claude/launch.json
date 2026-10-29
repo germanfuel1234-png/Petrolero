@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=@petrolero/web"],
+      "port": 5173
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=@petrolero/api"],
+      "port": 3000
+    },
+    {
+      "name": "diseno-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "4173", "--directory", "/home/german/Escritorio/petrolero/Diseño-App-Válvulas-Oil-&-Gas"],
+      "port": 4173
+    }
+  ]
+}

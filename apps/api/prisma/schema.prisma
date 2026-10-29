@@ -1,0 +1,175 @@
+// Modelo de datos — Sistema de gestión de válvulas (Oil & Gas)
+//
+// Nota sobre PostGIS: la columna `geom` de Pozo NO se declara acá. Se agrega por migración SQL
+// como columna generada a partir de lat/lng (ver migrations/.../postgis.sql). Prisma maneja
+// lat/lng como Float —CRUD simple y tipado— y las consultas espaciales usan $queryRaw sobre geom.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// La extensión PostGIS ya viene instalada en la imagen postgis/postgis del docker-compose,
+// así que no se declara acá: si Prisma la gestionara, marcaría como "drift" las extensiones
+// extra que trae la imagen (tiger_geocoder, topology) en cada migración.
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Zona {
+  id     String @id @default(cuid())
+  nombre String @unique
+
+  // Centro aproximado de la zona, para encuadrar el mapa.
+  lat Float
+  lng Float
+
+  pozos Pozo[]
+
+  creadoEn DateTime @default(now())
+}
+
+model Pozo {
+  id     String @id @default(cuid())
+  nombre String @unique
+
+  zona   Zona   @relation(fields: [zonaId], references: [id], onDelete: Cascade)
+  zonaId String
+
+  // TODO[CLIENTE]: estas coordenadas vienen del seed sintético. Hacen falta las ubicaciones reales
+  // de los pozos para que el mapa y el agrupamiento por cercanía sirvan de verdad.
+  lat Float
+  lng Float
+
+  valvulas Valvula[]
+
+  creadoEn DateTime @default(now())
+
+  @@index([zonaId])
+}
+
+model Valvula {
+  id String @id @default(cuid())
+
+  pozo   Pozo   @relation(fields: [pozoId], references: [id], onDelete: Cascade)
+  pozoId String
+
+  // Código corto visible en el visor 3D, ej "V-1".
+  codigo String
+  nombre String
+
+  // VERTICAL | HORIZONTAL — del audio: "cuatro en vertical, cinco en horizontal".
+  // La cantidad de válvulas por pozo es variable: no hay ningún límite fijo acá.
+  orientacion String
+
+  // Posición dentro de su grupo de orientación, para ubicarla en el modelo 3D.
+  orden Int
+
+  eventos EventoMantenimiento[]
+
+  creadoEn DateTime @default(now())
+
+  @@unique([pozoId, codigo])
+  @@index([pozoId])
+}
+
+/// Historial de mantenimiento. APPEND-ONLY: nunca se actualiza ni se borra una fila.
+/// Cada inspección es un registro nuevo; el estado actual de una válvula es su evento más reciente.
+/// Se diseña así porque la prueba de hermeticidad es un dato de seguridad y su historial
+/// tiene que ser reconstruible.
+model EventoMantenimiento {
+  id String @id @default(cuid())
+
+  valvula   Valvula @relation(fields: [valvulaId], references: [id], onDelete: Cascade)
+  valvulaId String
+
+  fecha            DateTime
+  engraseRealizado Boolean  @default(true)
+
+  // OK | NEGATIVO
+  resultadoPrueba String
+
+  // Calculada por el backend: fecha + 1 año cuando el resultado es OK. Null si fue NEGATIVO.
+  proximaRevision DateTime?
+
+  observaciones String?
+
+  // TODO[CLIENTE]: se guarda quién cargó el registro, pero no hay firma digital ni validación
+  // de un segundo responsable. Confirmar si la normativa de la empresa exige trazabilidad formal.
+  registradoPor String?
+
+  accionCorrectiva AccionCorrectiva?
+
+  creadoEn DateTime @default(now())
+
+  @@index([valvulaId, fecha])
+}
+
+/// Catálogo de acciones correctivas. Vive en base (no es un enum) justamente porque
+/// el listado completo lo tiene que confirmar el cliente: así se agregan filas sin tocar código.
+model TipoAccionCorrectiva {
+  id          String  @id @default(cuid())
+  nombre      String  @unique
+  descripcion String?
+  activo      Boolean @default(true)
+
+  acciones AccionCorrectiva[]
+}
+
+model AccionCorrectiva {
+  id String @id @default(cuid())
+
+  // Relación 1-a-1: una acción nace de un evento con prueba NEGATIVA.
+  evento   EventoMantenimiento @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  eventoId String              @unique
+
+  tipoAccion   TipoAccionCorrectiva @relation(fields: [tipoAccionId], references: [id])
+  tipoAccionId String
+
+  // PENDIENTE | PLANIFICADA | COMPLETADA
+  estado String @default("PENDIENTE")
+
+  planSemanal   PlanSemanal? @relation(fields: [planSemanalId], references: [id])
+  planSemanalId String?
+
+  creadoEn DateTime @default(now())
+
+  @@index([estado])
+  @@index([tipoAccionId])
+  @@index([planSemanalId])
+}
+
+model PlanSemanal {
+  id     String @id @default(cuid())
+  nombre String
+
+  // Lunes de la semana planificada.
+  semanaInicio DateTime
+
+  // Se completa cuando se avisa al equipo de campo.
+  notificadoEn DateTime?
+
+  acciones AccionCorrectiva[]
+
+  creadoEn DateTime @default(now())
+
+  @@index([semanaInicio])
+}
+
+/// TODO[CLIENTE]: se asumen 2 roles (SUPERVISOR, TECNICO). Falta confirmar si hay más perfiles
+/// (gerencia, HSE, auditoría) y qué puede ver/editar exactamente cada uno.
+model Usuario {
+  id     String @id @default(cuid())
+  email  String @unique
+  nombre String
+
+  // Hash bcrypt. Nunca se guarda la contraseña en texto plano.
+  passwordHash String
+
+  // SUPERVISOR | TECNICO
+  rol String
+
+  activo Boolean @default(true)
+
+  creadoEn DateTime @default(now())
+}

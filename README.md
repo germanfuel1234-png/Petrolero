@@ -18,10 +18,19 @@ docker compose up -d     # PostgreSQL 16 + PostGIS 3.4
 npm install
 npm run db:migrate       # crea el esquema
 npm run db:seed          # datos de demostración (40 pozos sintéticos)
-npm run dev              # API en :3000 · Web en :5173
+npm run dev              # API en :3100 · Web en :5173
 ```
 
 Abrir <http://localhost:5173>.
+
+> La API usa el puerto **3100**, no el 3000, porque ese suele estar ocupado por otros
+> proyectos. Se cambia con `PORT` en `apps/api/.env`; el frontend lo resuelve con
+> `VITE_API_URL` (ver `apps/web/vite.config.ts`).
+
+> El mapa y el visor 3D necesitan que la pestaña esté **visible**: MapLibre y Three.js
+> cargan dentro de `requestAnimationFrame`, que el navegador congela en pestañas de
+> segundo plano. Si abrís la app y dejás la pestaña en background, el mapa aparece
+> recién cuando volvés a ella.
 
 Usuarios de prueba (contraseña `petrolero123`):
 

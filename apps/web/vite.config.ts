@@ -20,8 +20,10 @@ export default defineConfig({
     proxy: {
       // El frontend llama a /api y Vite lo redirige a NestJS: así no hay CORS en desarrollo
       // y la URL de la API es la misma en dev y en producción.
+      // El puerto de la API se toma de VITE_API_URL para poder moverlo sin tocar código:
+      // el 3000 suele estar ocupado por otros proyectos.
       '/api': {
-        target: 'http://localhost:3000',
+        target: process.env.VITE_API_URL ?? 'http://localhost:3100',
         changeOrigin: true,
       },
     },

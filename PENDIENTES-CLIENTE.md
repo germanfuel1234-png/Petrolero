@@ -2,7 +2,7 @@
 
 > **Archivo autogenerado — no editar a mano.**
 > Se regenera con `npm run pendientes`.
-> Última actualización: 2026-10-23
+> Última actualización: 2026-11-07
 
 Este documento lista todo lo que se construyó con un dato asumido porque todavía no
 tenemos la definición del cliente. El sistema funciona igual: cada punto está aislado
@@ -131,9 +131,9 @@ para poder reemplazarlo sin reescribir el módulo que lo usa.
 
 ### Bloqueados esperando al cliente (`TODO[CLIENTE]`)
 
-- `apps/api/prisma/schema.prisma:39` — estas coordenadas vienen del seed sintético. Hacen falta las ubicaciones reales
-- `apps/api/prisma/schema.prisma:97` — se guarda quién cargó el registro, pero no hay firma digital ni validación
-- `apps/api/prisma/schema.prisma:159` — se asumen 2 roles (SUPERVISOR, TECNICO). Falta confirmar si hay más perfiles
+- `apps/api/prisma/schema.prisma:42` — estas coordenadas vienen del seed sintético. Hacen falta las ubicaciones reales
+- `apps/api/prisma/schema.prisma:127` — se guarda quién cargó el registro, pero no hay firma digital ni validación
+- `apps/api/prisma/schema.prisma:189` — se asumen 2 roles (SUPERVISOR, TECNICO). Falta confirmar si hay más perfiles
 - `apps/api/prisma/seed.ts:48` — catálogo de acciones correctivas incompleto. En los audios se mencionó
 - `apps/api/prisma/seed.ts:97` — usuarios de prueba con contraseña conocida. Hay que reemplazarlos por los
 - `apps/api/src/auth/permisos.guard.ts:28` — la exigencia está APAGADA por defecto (AUTH_HABILITADA=false) porque el
@@ -151,5 +151,5 @@ para poder reemplazarlo sin reescribir el módulo que lo usa.
 ### Decisiones tomadas por mí (`TODO[SUPUESTO]`)
 
 - `apps/api/prisma/seed.ts:5` — todos los pozos, válvulas e historiales de este archivo son INVENTADOS.
-- `apps/api/src/auth/roles.ts:40` — se asume que el técnico de campo no planifica ni importa datos masivos.
-- `apps/api/src/importador/importador.service.ts:401` — si el Excel no indica orientación se asume VERTICAL.
+- `apps/api/src/auth/roles.ts:44` — se asume que el técnico de campo no planifica ni importa datos masivos.
+- `apps/api/src/importador/importador.service.ts:406` — si el Excel no indica orientación se asume VERTICAL.

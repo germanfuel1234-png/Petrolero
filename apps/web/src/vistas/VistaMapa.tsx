@@ -7,7 +7,11 @@ import {
 import { useMemo, useState } from 'react';
 
 import { BannerSupuesto } from '../componentes/BannerSupuesto';
+import { ListaVirtual } from '../componentes/ListaVirtual';
 import { MapaPozos } from '../componentes/mapa/MapaPozos';
+
+/** Alto fijo de cada fila del listado, en px. Lo exige la virtualización. */
+const ALTO_FILA = 58;
 
 interface Props {
   zonas: ZonaResumen[];
@@ -45,6 +49,12 @@ export function VistaMapa({
   }, [pozos, busqueda, filtroEstado]);
 
   const zona = zonas.find((z) => z.id === zonaSeleccionada) ?? null;
+
+  // Para mostrar la zona de cada pozo en el listado cuando no tiene acciones pendientes.
+  const nombresDeZona = useMemo(
+    () => new Map(zonas.map((z) => [z.id, z.nombre])),
+    [zonas],
+  );
 
   return (
     <div className="mapa-layout">
@@ -114,21 +124,32 @@ export function VistaMapa({
           {zona ? `Pozos de ${zona.nombre}` : 'Todos los pozos'} ({pozosVisibles.length})
         </h2>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {pozosVisibles.length === 0 && (
+        {/*
+          Lista virtualizada: con cientos de pozos, renderizar un botón por cada uno
+          vuelve lenta la pantalla. Las filas tienen alto fijo (ALTO_FILA) para que el
+          cálculo de virtualización sea exacto; por eso la segunda línea siempre está
+          presente, mostrando la zona cuando no hay acciones pendientes.
+        */}
+        <ListaVirtual
+          items={pozosVisibles}
+          altoItem={ALTO_FILA}
+          className="lista-pozos"
+          vacio={
             <p style={{ fontSize: 12, color: 'var(--texto-tenue)' }}>
               Ningún pozo coincide con el filtro.
             </p>
-          )}
-
-          {pozosVisibles.map((pozo) => (
+          }
+        >
+          {(pozo) => (
             <button
-              key={pozo.id}
               type="button"
               onClick={() => onAbrirPozo(pozo.id)}
               style={{
+                display: 'block',
+                width: '100%',
+                height: ALTO_FILA - 6,
                 textAlign: 'left',
-                padding: 9,
+                padding: '7px 9px',
                 background: 'var(--fondo)',
                 border: '1px solid var(--borde)',
                 borderRadius: 4,
@@ -160,14 +181,24 @@ export function VistaMapa({
                   {pozo.cantidadValvulas} válvulas
                 </span>
               </div>
-              {pozo.accionesPendientes > 0 && (
-                <div style={{ fontSize: 10.5, color: 'var(--aviso)', marginTop: 4 }}>
-                  {pozo.accionesPendientes} acciones pendientes
-                </div>
-              )}
+
+              <div
+                style={{
+                  fontSize: 10.5,
+                  marginTop: 3,
+                  color: pozo.accionesPendientes > 0 ? 'var(--aviso)' : 'var(--texto-tenue)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {pozo.accionesPendientes > 0
+                  ? `${pozo.accionesPendientes} acciones pendientes`
+                  : (nombresDeZona.get(pozo.zonaId) ?? 'Sin acciones pendientes')}
+              </div>
             </button>
-          ))}
-        </div>
+          )}
+        </ListaVirtual>
       </aside>
 
       <MapaPozos

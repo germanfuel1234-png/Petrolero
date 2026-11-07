@@ -260,7 +260,21 @@ textarea {
   background: var(--superficie);
   border-right: 1px solid var(--borde);
   padding: 14px;
+  /* Columna con overflow oculto: el que scrollea es el listado virtualizado de adentro,
+     que necesita conocer su propia altura para calcular qué filas dibujar. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lista-pozos {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+}
+
+.lista-pozos > div > div > div {
+  padding-bottom: 6px;
 }
 
 .mapa-contenedor {
@@ -658,6 +672,16 @@ tbody tr:hover {
     border-bottom: 1px solid var(--borde);
     max-height: none;
     order: 2;
+    /* En mobile el que scrollea es .mapa-layout, así que el panel crece con su contenido. */
+    overflow: visible;
+  }
+
+  /* Sin un alto acotado, la lista virtualizada no sabe cuántas filas dibujar
+     (flex:1 colapsaría a 0 dentro de un panel que crece libremente). */
+  .lista-pozos {
+    flex: none;
+    height: 60vh;
+    min-height: 300px;
   }
 
   .mapa-contenedor {

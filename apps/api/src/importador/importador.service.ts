@@ -220,9 +220,14 @@ export class ImportadorService {
         }
 
         // --- Pozo ---
-        let pozoId = pozosPorNombre.get(fila.pozo);
+        // La clave incluye la zona: el nombre del pozo es único por zona, no global,
+        // así que dos yacimientos pueden traer un "PM-1001" cada uno sin pisarse.
+        const clavePozo = `${zonaId}::${fila.pozo}`;
+        let pozoId = pozosPorNombre.get(clavePozo);
         if (!pozoId) {
-          const existente = await this.prisma.pozo.findUnique({ where: { nombre: fila.pozo } });
+          const existente = await this.prisma.pozo.findUnique({
+            where: { zonaId_nombre: { zonaId, nombre: fila.pozo } },
+          });
           if (existente) {
             pozoId = existente.id;
           } else {
@@ -246,7 +251,7 @@ export class ImportadorService {
             pozoId = creado.id;
             reporte.creados.pozos++;
           }
-          pozosPorNombre.set(fila.pozo, pozoId);
+          pozosPorNombre.set(clavePozo, pozoId);
         }
 
         // --- Válvula ---

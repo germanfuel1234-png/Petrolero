@@ -31,9 +31,12 @@ model Zona {
 
 model Pozo {
   id     String @id @default(cuid())
-  nombre String @unique
+  nombre String
 
-  zona   Zona   @relation(fields: [zonaId], references: [id], onDelete: Cascade)
+  // Restrict y no Cascade: borrar una zona no puede arrastrarse los pozos y, con ellos,
+  // el historial de mantenimiento. Para sacar una zona de circulación hay que archivar
+  // antes sus pozos.
+  zona   Zona   @relation(fields: [zonaId], references: [id], onDelete: Restrict)
   zonaId String
 
   // TODO[CLIENTE]: estas coordenadas vienen del seed sintético. Hacen falta las ubicaciones reales
@@ -41,17 +44,38 @@ model Pozo {
   lat Float
   lng Float
 
+  /// Columna geoespacial que PostgreSQL deriva sola de lat/lng (ver la migración
+  /// postgis_geom_pozo). Se declara como Unsupported para que Prisma sepa que existe:
+  /// sin esta línea, cualquier `prisma migrate dev` futuro la detecta como columna
+  /// sobrante y la BORRA, rompiendo el agrupamiento por cercanía.
+  /// No se lee ni escribe desde Prisma Client; las consultas espaciales usan $queryRaw.
+  geom Unsupported("geography(Point, 4326)")?
+
+  /// Borrado lógico. Un pozo archivado desaparece de mapas, listados y KPIs, pero
+  /// conserva su historial de pruebas de hermeticidad, que es dato de seguridad.
+  archivadoEn DateTime?
+  archivadoPor String?
+  motivoArchivado String?
+
   valvulas Valvula[]
 
   creadoEn DateTime @default(now())
 
+  // El nombre es único DENTRO de la zona, no en todo el sistema: en la industria es
+  // habitual que dos yacimientos repitan la numeración de pozos.
+  @@unique([zonaId, nombre])
   @@index([zonaId])
+  @@index([archivadoEn])
+  // Índice espacial del clustering por cercanía. Declarado acá por el mismo motivo que
+  // la columna geom: si Prisma no lo conoce, lo borra en la próxima migración.
+  @@index([geom], map: "pozo_geom_idx", type: Gist)
 }
 
 model Valvula {
   id String @id @default(cuid())
 
-  pozo   Pozo   @relation(fields: [pozoId], references: [id], onDelete: Cascade)
+  // Restrict: una válvula con historial no se borra. Si se desmonta del pozo, se archiva.
+  pozo   Pozo   @relation(fields: [pozoId], references: [id], onDelete: Restrict)
   pozoId String
 
   // Código corto visible en el visor 3D, ej "V-1".
@@ -65,22 +89,28 @@ model Valvula {
   // Posición dentro de su grupo de orientación, para ubicarla en el modelo 3D.
   orden Int
 
+  /// Borrado lógico, mismo criterio que Pozo: conserva el historial de la válvula.
+  archivadoEn DateTime?
+
   eventos EventoMantenimiento[]
 
   creadoEn DateTime @default(now())
 
   @@unique([pozoId, codigo])
   @@index([pozoId])
+  @@index([archivadoEn])
 }
 
-/// Historial de mantenimiento. APPEND-ONLY: nunca se actualiza ni se borra una fila.
+/// Historial de mantenimiento. APPEND-ONLY en sentido estricto: no se actualiza, no se
+/// borra, y tampoco se puede borrar por arrastre al eliminar la válvula o el pozo
+/// (por eso las relaciones son Restrict y el retiro de equipos es por archivado).
 /// Cada inspección es un registro nuevo; el estado actual de una válvula es su evento más reciente.
 /// Se diseña así porque la prueba de hermeticidad es un dato de seguridad y su historial
 /// tiene que ser reconstruible.
 model EventoMantenimiento {
   id String @id @default(cuid())
 
-  valvula   Valvula @relation(fields: [valvulaId], references: [id], onDelete: Cascade)
+  valvula   Valvula @relation(fields: [valvulaId], references: [id], onDelete: Restrict)
   valvulaId String
 
   fecha            DateTime

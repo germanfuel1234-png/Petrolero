@@ -26,7 +26,8 @@ export type Permiso =
   | 'completar:acciones'
   | 'crear:planes'
   | 'notificar:planes'
-  | 'importar:datos';
+  | 'importar:datos'
+  | 'archivar:pozos';
 
 export const PERMISOS: Record<Rol, Permiso[]> = {
   SUPERVISOR: [
@@ -36,6 +37,9 @@ export const PERMISOS: Record<Rol, Permiso[]> = {
     'crear:planes',
     'notificar:planes',
     'importar:datos',
+    // Retirar un pozo de operación queda reservado al supervisor: afecta qué ve
+    // todo el equipo y saca el pozo de los KPIs.
+    'archivar:pozos',
   ],
   // TODO[SUPUESTO]: se asume que el técnico de campo no planifica ni importa datos masivos.
   TECNICO: ['ver:pozos', 'registrar:mantenimiento', 'completar:acciones'],
